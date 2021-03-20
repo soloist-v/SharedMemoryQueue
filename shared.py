@@ -238,6 +238,9 @@ class Queue:
     def __len__(self):
         return self.length
 
+    def __del__(self):
+        self.sm.close()
+
     @property
     def start(self):
         return self.cursor[0]
