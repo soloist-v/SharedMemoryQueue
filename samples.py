@@ -5,6 +5,7 @@ from ctypes import cdll, c_long, c_int, POINTER, c_uint8, cast, c_uint16, sizeof
 
 class DetPickler(Pickler):
     """
+    This is an example of sending an image, a label, and a border at the same time.
     这是一个将图片、标签、边框 同时传送的例子
     """
 
@@ -55,6 +56,7 @@ class DetPickler(Pickler):
 
 class ImgPickler(Pickler):
     """
+    This example sends a string, an image array, and a frame number simultaneously.
     这个例子实现了同时发送字符串、图片数组、帧号
     """
 
@@ -110,6 +112,7 @@ class ImgPickler(Pickler):
 
 class FilepathPickler(Pickler):
     """
+    This example passes the file path path through the queue.
     这个例子将文件路径路径通过队列传递
     """
 
