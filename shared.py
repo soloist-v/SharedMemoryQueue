@@ -36,6 +36,7 @@ except:
         if number is None:
             number = int("".join(map(lambda x: str(ord(x)), base_name))) % 251
             number = c_uint8(number)
+        base_name = os.path.abspath(base_name)
         return dll.ftok(base_name, number)
 
 
