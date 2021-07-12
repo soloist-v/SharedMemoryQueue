@@ -441,6 +441,10 @@ class Queue:
         self.__out[0] = val
 
     def __init__(self, maxsize, item_size):
+        """
+        @param maxsize: the max number of item
+        @param item_size: the size of item
+        """
         size = maxsize * item_size
         self.init(size)
 
