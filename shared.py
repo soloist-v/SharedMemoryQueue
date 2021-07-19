@@ -256,6 +256,7 @@ except ImportError:
 
         def as_array(p, length, c_type, offset=0):
             """
+            Note that offset is in bytes
             注意 offset 是以字节为单位的
             """
             type_p = POINTER(c_type * length)
@@ -267,6 +268,7 @@ except ImportError:
         class SharedMemory:
             def __init__(self, name: str, create: bool, size: int):
                 """
+                Used to replace the built-in SharedMemory, because Python versions less than 3.8 do not have this module
                 用于代替内置的SharedMemory，因为小于3.8版本的python 没有这个模块
                 @param name:
                 @param create:
@@ -440,12 +442,11 @@ class Queue:
     def _out(self, val):
         self.__out[0] = val
 
-    def __init__(self, maxsize, item_size):
+    def __init__(self, buffer_size):
         """
-        @param maxsize: the max number of item
-        @param item_size: the size of item
+        @param buffer_size: the size of shared memory
         """
-        size = maxsize * item_size
+        size = buffer_size
         self.init(size)
 
     def __getstate__(self):
