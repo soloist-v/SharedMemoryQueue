@@ -557,7 +557,7 @@ class Queue:
             return data_obj
 
     def get_nowait(self):
-        self.get(False)
+        return self.get(False)
 
     def put_nowait(self, data):
         self.put(data, False)
