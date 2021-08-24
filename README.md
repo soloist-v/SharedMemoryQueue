@@ -6,6 +6,7 @@
 
     1.Windows: SharedMemoryQueue > multiprocessing.Queue > socket
     2.Linux: SharedMemoryQueue > socket > multiprocessing.Queue
+    3.Support for process pools
 # References
 
     1.linux kernel KFifo https://www.programmersought.com/article/4031516754/
