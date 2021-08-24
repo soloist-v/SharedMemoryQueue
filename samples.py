@@ -11,7 +11,7 @@ if __name__ == '__main__':
     import multiprocessing as mp
     import time
 
-    t_que = Queue(1024 * 4)
+    t_que = Queue(buffer_size=1024 * 4)
     proc = mp.Process(target=task, args=(t_que,))
     proc.start()
     for i in range(10):

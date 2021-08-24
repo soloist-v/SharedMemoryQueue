@@ -1,8 +1,11 @@
 # SharedMemoryQueue
 
     A queue implemented using shared memory. 
-    使用共享内存实现的队列
+    基于共享内存实现的队列
+# compare with multiprocessing Queue
 
+    1.Windows: SharedMemoryQueue > multiprocessing.Queue > socket
+    2.Linux: SharedMemoryQueue > socket > multiprocessing.Queue
 # reference
 
     1.linux kernel KFifo https://www.programmersought.com/article/4031516754/

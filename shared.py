@@ -18,8 +18,6 @@ if os.name == "nt":
 
     _USE_POSIX = False
 else:
-    import _posixshmem
-
     _USE_POSIX = True
 _SHM_SAFE_NAME_LENGTH = 14
 
