@@ -257,7 +257,6 @@ class ArrayIO:
     def __init__(self, arr: np.ndarray):
         self.buffer = arr
         self.cursor = 0
-        self.size = len(self.buffer)
 
     def read(self, n) -> Any:
         data = self.buffer[self.cursor: self.cursor + n]
@@ -268,7 +267,7 @@ class ArrayIO:
         pass
 
     def write(self, data) -> int:
-        data = np.frombuffer(data, np.uint8)
+        data = np.frombuffer(data, uint8)
         data_len = len(data)
         end = self.cursor + data_len
         self.buffer[self.cursor: end] = data
