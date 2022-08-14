@@ -1,13 +1,16 @@
 import platform
 import warnings
+from typing import Any
+
 import numpy as np
 from ctypes import cdll, c_long, c_int, POINTER, c_uint8, cast, c_uint16, sizeof, c_uint64, c_int32, c_int64, c_uint32
+from numpy import ndarray, uint8, uint32
+from pickle import dump, loads
 import multiprocessing as mp
 import hashlib
 import mmap
 import os
 import secrets
-import pickle
 
 if os.name == "nt":
     import _winapi
@@ -250,21 +253,48 @@ class Dict(object):
         self.__dict__[key] = value
 
 
-def read_data(buffer: np.ndarray):
+class ArrayIO:
+    def __init__(self, arr: np.ndarray):
+        self.buffer = arr
+        self.cursor = 0
+        self.size = len(self.buffer)
+
+    def read(self, n) -> Any:
+        data = self.buffer[self.cursor: self.cursor + n]
+        self.cursor += len(data)
+        return data
+
+    def readline(self) -> Any:
+        pass
+
+    def write(self, data) -> int:
+        data = np.frombuffer(data, np.uint8)
+        data_len = len(data)
+        end = self.cursor + data_len
+        self.buffer[self.cursor: end] = data
+        self.cursor = end
+        return data_len
+
+    def __len__(self):
+        return self.cursor
+
+
+def read_data(buffer: ndarray):
     buffer = buffer.view("uint8")
-    data_len = buffer[:4].view(np.uint32)[0]
+    data_len = buffer[:4].view(uint32)[0]
     res_data = buffer[4: 4 + data_len]
     if not len(res_data):
         return None
-    return pickle.loads(res_data)
+    return loads(res_data)
 
 
-def write_data(buffer, data):
-    buffer = buffer.view("uint8")
-    data_b = np.frombuffer(pickle.dumps(data, -1), dtype=np.uint8)
-    buffer[:4] = np.array((len(data_b),), np.uint32).view(dtype="uint8")
-    buffer[4: 4 + len(data_b)] = data_b
-    return len(data_b)
+def write_data(buffer: ndarray, obj):
+    buffer = buffer.reshape(-1).view(uint8)
+    file = ArrayIO(buffer[4:])
+    dump(obj, file, -1)
+    data_len = len(file)
+    buffer[:4] = np.array((data_len,), uint32).view(dtype=uint8)
+    return data_len
 
 
 class ReadWriteLock:

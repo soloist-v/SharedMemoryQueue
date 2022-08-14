@@ -1,12 +1,12 @@
-from typing import List, Any
+from typing import List, Any, Tuple
 import numpy as np
 from ctypes import c_uint8, sizeof
 from typing import Union
 import ctypes as ct
 import os
 import secrets
-from numpy import ndarray
-from shared import SharedMemory
+from numpy import ndarray, prod
+from shared import SharedMemory, read_data, write_data
 from shared_memory_record import SharedMemoryRecorder
 
 base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -39,13 +39,26 @@ class _Nop:
         pass
 
 
-class FieldMeta(type):
-    def __new__(mcs, what: str, bases, attr_dict):
-        cls = super().__new__(mcs, what, (_Nop,), attr_dict)
-        return cls
+class NDArray(ndarray):
+    def set_data(self, data):
+        write_data(self, data)
+
+    def get_data(self):
+        return read_data(self)
+
+    @property
+    def value(self):
+        return self[0]
+
+    @value.setter
+    def value(self, val):
+        self[0] = val
 
 
-class Array(ndarray, SharedMemoryRecorder):
+class Array(NDArray, SharedMemoryRecorder):
+    """
+    无论是windows还是linux共享内存的初始值均为0，所以无需后续的初始化值
+    """
 
     def __new__(cls, shape, dtype: Union[str, np.dtype, object] = None, name=None, create=True, offset=0,
                 strides=None, order=None):
@@ -55,18 +68,23 @@ class Array(ndarray, SharedMemoryRecorder):
         buf = SharedMemory(name, create=create, size=size)
         obj = super().__new__(cls, shape, dtype, buf.buf, offset, strides, order)
         obj.buf = buf
-        cls.save_sm_name(buf.name, buf.size)
+        if create:
+            cls.save_sm_name(buf.name, buf.size)
         return obj
 
     @property
     def name(self):
         if hasattr(self, "buf"):
             return self.buf.name
-        raise Exception("This array has been transferred(此数组发生了转移)/copy")
+        raise Exception("此数组发生了转移/copy")
+
+    @name.setter
+    def name(self, val):
+        raise Exception("Unsupported set name")
 
     def close(self):
         if not hasattr(self, "buf"):
-            raise Exception("This array has been transferred(此数组发生了转移)/copy")
+            raise Exception("此数组发生了转移/copy")
         self.buf.close()
         self.buf.unlink()
 
@@ -120,6 +138,14 @@ def full(shape, fill_value, dtype=None, name=None, create=True):
     return arr
 
 
+def ones(shape, dtype=None, name=None, create=True):
+    return full(shape, 1, dtype, name, create)
+
+
+def ones_like(arr, dtype=None, name=None, create=True):
+    return full_like(arr, 1, dtype, name, create)
+
+
 class Dict(object):
 
     def __init__(self, **kwargs):
@@ -138,39 +164,52 @@ class Dict(object):
         self.__dict__[key] = value
 
 
-class SharedField(ndarray, metaclass=FieldMeta):
-    def __init__(self, length, c_type: Any = c_uint8, value=0):
-        super().__init__(())
-        self.name = None
-        self.length = length
-        self.c_type = c_type
-        self.value = value
+class FieldMeta(type):
+    def __new__(mcs, what: str, bases, attr_dict):
+        bases = (*filter(lambda t: t not in (ndarray, Array), bases),)
+        cls = super().__new__(mcs, what, bases, attr_dict)
+        return cls
+
+
+class SharedField(NDArray, metaclass=FieldMeta):
+    def __init__(self, shape: Union[List, Tuple, int], c_type: Any = c_uint8, value=0):
+        object.__init__(self)
+        if c_type is int:
+            c_type = ct.c_int
+        if c_type is float:
+            c_type = ct.c_float
+        setattr(self, "#name", None)
+        setattr(self, "#shape", shape)
+        setattr(self, "#c_type", c_type)
+        setattr(self, "#value", value)
 
 
 class SharedFieldUint8(SharedField):
-    def __init__(self, length, value=0):
-        super().__init__(length, c_uint8, value)
+    def __init__(self, shape, value=0):
+        super().__init__(shape, c_uint8, value)
 
 
 class SharedFieldInt(SharedField):
-    def __init__(self, length, value=0):
-        super().__init__(length, ct.c_int, value)
+    def __init__(self, shape, value=0):
+        super().__init__(shape, ct.c_int, value)
 
 
 class SharedFieldInt64(SharedField):
-    def __init__(self, length, value=0):
-        super().__init__(length, ct.c_int64, value)
+    def __init__(self, shape, value=0):
+        super().__init__(shape, ct.c_int64, value)
 
 
 class SharedFieldInt32(SharedField):
-    def __init__(self, length, value=0):
-        super().__init__(length, ct.c_int32, value)
+    def __init__(self, shape, value=0):
+        super().__init__(shape, ct.c_int32, value)
 
 
-def create_shared(self, name, create, fields):
+def create_shared(self, name, create, fields: List[SharedField]):
     total_size = 0
     for field in fields:
-        total_size += field.length * sizeof(field.c_type)
+        shape = getattr(field, "#shape")
+        c_type = getattr(field, "#c_type")
+        total_size += prod(shape) * sizeof(c_type)
     buf = zeros(total_size, c_uint8, name, create)
     setattr(self, "$buf", buf)
     setattr(self, "$name", buf.name)
@@ -178,10 +217,14 @@ def create_shared(self, name, create, fields):
     buffer = buf.buf.buf
     offset = 0
     for field in fields:
-        arr = np.ndarray((field.length,), field.c_type, buffer, offset=offset)
-        arr[:] = field.value
-        setattr(self, field.name, arr)
-        offset += field.length * sizeof(field.c_type)
+        name = getattr(field, "#name")
+        shape = getattr(field, "#shape")
+        c_type = getattr(field, "#c_type")
+        value = getattr(field, "#value")
+        arr = NDArray(shape, c_type, buffer, offset=offset)
+        arr[:] = value
+        setattr(self, name, arr)
+        offset += prod(shape) * sizeof(c_type)
     return self
 
 
@@ -193,9 +236,10 @@ class SharedStructureMeta(type):
         fields: List[SharedField] = []
         for k, v in vars(self).items():
             if isinstance(v, SharedField):
-                if k in {"close"}:
-                    raise Exception(f"Field name error '{k}'")
-                v.name = k
+                if k in {"get_sm_name", "close"}:
+                    raise Exception("Field name error")
+                # v._name = k
+                setattr(v, "#name", k)
                 fields.append(v)
         create_shared(self, name, create, fields)
         return self
@@ -207,11 +251,14 @@ class SharedStructure(metaclass=SharedStructureMeta):
         setattr(self, "$name", name)
         setattr(self, "$create", create)
 
+    def get_sm_name(self):
+        return getattr(self, "$buf").name
+
     def close(self):
         return getattr(self, "$buf").close()
 
     def __getstate__(self):
-        return getattr(self, "$buf").name, getattr(self, "$fields")
+        return self.get_sm_name(), getattr(self, "$fields")
 
     def __setstate__(self, state):
         name, fields = state

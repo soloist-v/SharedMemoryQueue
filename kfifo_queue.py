@@ -7,24 +7,6 @@ from ctypes import c_uint8, c_uint32
 import pickle
 
 
-def read_data(buffer: np.ndarray):
-    buffer = buffer.view("uint8")
-    # data_len = struct.unpack("I", buffer[:4].tobytes())[0]
-    data_len = buffer[:4].view(np.uint32)[0]
-    res_data = buffer[4: 4 + data_len]
-    if not len(res_data):
-        return None
-    return pickle.loads(res_data)
-
-
-def write_data(buffer, data):
-    buffer = buffer.view("uint8")
-    data_b = np.frombuffer(pickle.dumps(data, -1), dtype=np.uint8)
-    buffer[:4] = np.array((len(data_b),), np.uint32).view(dtype="uint8")
-    buffer[4: 4 + len(data_b)] = data_b
-    return len(data_b)
-
-
 def roundup_pow_of_two(n):
     position = 0
     x = n - 1
