@@ -287,6 +287,11 @@ def read_data(buffer: ndarray):
     return loads(res_data)
 
 
+def read_data1(buffer: ndarray):
+    data_len = buffer[:4].view(uint32)[0]
+    return loads(buffer[4: 4 + data_len].tobytes())
+
+
 def write_data(buffer: ndarray, obj):
     buffer = buffer.reshape(-1).view(uint8)
     file = ArrayIO(buffer[4:])
@@ -294,6 +299,13 @@ def write_data(buffer: ndarray, obj):
     data_len = len(file)
     buffer[:4] = np.array((data_len,), uint32).view(dtype=uint8)
     return data_len
+
+
+def write_data1(buffer: ndarray, obj):
+    file = ArrayIO(buffer[4:])
+    dump(obj, file, -1)
+    data_len = len(file)
+    buffer[:4] = np.array((data_len,), uint32).view(dtype=uint8)
 
 
 class ReadWriteLock:
