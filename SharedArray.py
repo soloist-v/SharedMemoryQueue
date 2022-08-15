@@ -137,7 +137,7 @@ class Dict(object):
 
 class FieldMeta(type):
     def __new__(mcs, what: str, bases, attr_dict):
-        bases = (*filter(lambda t: t not in (ndarray, Array), bases),)
+        bases = (*filter(lambda t: t not in (NDArray,), bases),)
         cls = super().__new__(mcs, what, bases, attr_dict)
         return cls
 
@@ -193,7 +193,8 @@ def create_shared(self, name, create, fields: List[SharedField]):
         c_type = getattr(field, "#c_type")
         value = getattr(field, "#value")
         arr = NDArray(shape, c_type, buffer, offset=offset)
-        arr[:] = value
+        if create:
+            arr[:] = value
         setattr(self, name, arr)
         offset += prod(shape) * sizeof(c_type)
     return self
@@ -209,7 +210,6 @@ class SharedStructureMeta(type):
             if isinstance(v, SharedField):
                 if k in {"get_sm_name", "close"}:
                     raise Exception("Field name error")
-                # v._name = k
                 setattr(v, "#name", k)
                 fields.append(v)
         create_shared(self, name, create, fields)

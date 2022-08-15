@@ -23,30 +23,30 @@ def roundup_pow_of_two(n):
 
 
 class Queue:
-    class Field(SharedStructure):
-        def __init__(self):
-            super().__init__()
-            self.in_ = SharedFieldInt32(1)
-            self.out_ = SharedFieldInt32(1)
-            self.buf = SharedFieldUint8(1)
-
     @property
     def _in(self):
-        return self.__in[0]
+        return self.sm.in_.value
 
     @_in.setter
     def _in(self, val):
-        self.__in[0] = c_uint32(val).value
+        self.sm.in_.value = val
 
     @property
     def _out(self):
-        return self.__out[0]
+        return self.sm.out_.value
 
     @_out.setter
     def _out(self, val):
-        self.__out[0] = val
+        self.sm.out_.value = val
 
-    def __init__(self, buffer_size=1024 * 4):
+    class SMField(SharedStructure):
+        def __init__(self, size):
+            super().__init__()
+            self.in_ = SharedField(1, c_uint32)
+            self.out_ = SharedField(1, c_uint32)
+            self.buf = SharedField(size)
+
+    def __init__(self, buffer_size, dumps=pickle.dumps, loads=pickle.loads):
         """
         @param buffer_size: the size of shared memory
         """
@@ -56,10 +56,9 @@ class Queue:
         self.lock = mp.Lock()
         self.not_full = mp.Condition(self.lock)
         self.not_empty = mp.Condition(self.lock)
-        self.sm = self.Field()
-        self.__in = self.sm.in_
-        self.__out = self.sm.out_
-        self._buffer = self.sm.buf
+        self.sm = self.SMField(self.size)
+        self.loads = loads
+        self.dumps = dumps
 
     def _qsize(self):
         _in = (self._in & (self.size - 1))
@@ -74,8 +73,8 @@ class Queue:
         length = min(length, self.size - self._in + self._out)
         l = min(length, self.size - (self._in & (self.size - 1)))
         st = (self._in & (self.size - 1))
-        self._buffer[st:st + l] = data[:l]
-        self._buffer[:length - l] = data[l:]
+        self.sm.buf[st:st + l] = data[:l]
+        self.sm.buf[:length - l] = data[l:]
         self._in += length
         return length
 
@@ -83,8 +82,8 @@ class Queue:
         length = min(length, self._in - self._out)
         l = min(length, self.size - (self._out & (self.size - 1)))
         st = (self._out & (self.size - 1))
-        buffer = self._buffer[st: st + l]
-        buffer1 = self._buffer[: length - l]
+        buffer = self.sm.buf[st: st + l]
+        buffer1 = self.sm.buf[: length - l]
         res = np.concatenate([buffer, buffer1])
         self._out += length
         return res
@@ -97,10 +96,10 @@ class Queue:
     def _get(self):
         data_len = self.__get(4).view(np.uint32)[0]
         data = self.__get(data_len).tobytes()
-        return pickle.loads(data)
+        return self.loads(data)
 
     def put(self, item, block=True, timeout=None):
-        data = np.frombuffer(pickle.dumps(item, -1), dtype=np.uint8)
+        data = np.frombuffer(self.dumps(item), np.uint8)
         with self.not_full:
             if not block:
                 if self.size - self._qsize() < len(data):
